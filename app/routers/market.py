@@ -13,6 +13,7 @@ from ..schemas.trade import TradeCreate
 from .connection_manager import ConnectionManager, ClientType  
 from pydantic import BaseModel
 from app.models.user import User
+import pytz
 
 manager = ConnectionManager()
 
@@ -35,11 +36,14 @@ async def receive_from_fe(websocket: WebSocket, db: Session):
                 print(f"Parsed JSON from FE: {data_json}")  
 
                 if "symbol" in data_json and "time" in data_json and "type" in data_json and "deposit" in data_json and "userId" in data_json and "current_price" in data_json:
+                    utc_time = datetime.fromisoformat(data_json["time"].replace("Z", "+00:00"))
+                    local_timezone = pytz.timezone('Asia/Ho_Chi_Minh')  
+                    local_time = utc_time.replace(tzinfo=pytz.utc).astimezone(local_timezone)
 
                     trade_data = TradeCreate(
                         symbol=data_json["symbol"],
                         userId=data_json["userId"],
-                        time_predict=datetime.fromisoformat(data_json["time"].replace("Z", "+00:00")),
+                        time_predict=local_time ,
                         type_predict=data_json["type"],
                         deposit=data_json["deposit"],
                         current_price=data_json["current_price"],
