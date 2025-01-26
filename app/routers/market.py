@@ -24,7 +24,6 @@ class OverrideRequest(BaseModel):
     target_price: float
     symbol: str  
     target_time: str  
-
 async def receive_from_fe(websocket: WebSocket, db: Session):
     try:
         while True:
@@ -43,7 +42,7 @@ async def receive_from_fe(websocket: WebSocket, db: Session):
                     trade_data = TradeCreate(
                         symbol=data_json["symbol"],
                         userId=data_json["userId"],
-                        time_predict=local_time ,
+                        time_predict=local_time,
                         type_predict=data_json["type"],
                         deposit=data_json["deposit"],
                         current_price=data_json["current_price"],
@@ -53,13 +52,15 @@ async def receive_from_fe(websocket: WebSocket, db: Session):
                     trade_service = TradeService(db)
                     created_trade = trade_service.create_trade(trade_data)
 
+                    print(f"Created trade with local time: {local_time.strftime('%Y-%m-%d %H:%M:%S %Z%z')}")
+
             except json.JSONDecodeError:
                 print("Received data is not a valid JSON")  
             except Exception as e:
                 print(f"Error processing data from FE: {e}")  
 
     except Exception as e:
-        print(f"Error receiving data from FE: {e}") 
+        print(f"Error receiving data from FE: {e}")
 
 async def send_market_data(websocket: WebSocket):
     try:
