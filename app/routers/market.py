@@ -24,6 +24,7 @@ class OverrideRequest(BaseModel):
     target_price: float
     symbol: str  
     target_time: str  
+
 async def receive_from_fe(websocket: WebSocket, db: Session):
     try:
         while True:
@@ -52,7 +53,8 @@ async def receive_from_fe(websocket: WebSocket, db: Session):
                     trade_service = TradeService(db)
                     created_trade = trade_service.create_trade(trade_data)
 
-                    print(f"Created trade with local time: {local_time.strftime('%Y-%m-%d %H:%M:%S %Z%z')}")
+                    # In ra thời gian local (giờ Việt Nam)
+                    print(f"Created trade with local time: {local_time.strftime('%Y-%m-%d %H:%M:%S')} Vietnam Time")
 
             except json.JSONDecodeError:
                 print("Received data is not a valid JSON")  
@@ -60,19 +62,22 @@ async def receive_from_fe(websocket: WebSocket, db: Session):
                 print(f"Error processing data from FE: {e}")  
 
     except Exception as e:
-        print(f"Error receiving data from FE: {e}")
+        print(f"Error receiving data from FE: {e}") 
 
 async def send_market_data(websocket: WebSocket):
     try:
         market_service = MarketService()
+        local_timezone = pytz.timezone('Asia/Ho_Chi_Minh')  # Múi giờ Việt Nam
+
         while True:
             btc_price, eth_price = await market_service.get_prices()
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            # print(f"Sending market data to FE: BTC={btc_price}, ETH={eth_price}, Time={current_time}")
+            current_time = datetime.now(local_timezone)  # Lấy thời gian hiện tại theo múi giờ Việt Nam
+            current_time_str = current_time.strftime("%Y-%m-%d %H:%M:%S")
+
             response_data = json.dumps({
                 "btc_price": btc_price,
                 "eth_price": eth_price,
-                "time": current_time 
+                "time": current_time_str  # Gửi thời gian theo múi giờ Việt Nam
             })
             await websocket.send_text(response_data)
 
@@ -105,10 +110,12 @@ async def fe_websocket_endpoint(
     except Exception as e:
         print(f"WebSocket error: {e}")
         await websocket.close(code=1011)
+
 def is_admin(user: User = Depends(get_current_user)):
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Only admins can perform this action")
     return user
+
 @router.post("/over_ride")
 async def override_price(
     request: OverrideRequest,
@@ -127,32 +134,37 @@ async def override_price(
 
 async def process_override_request(request: OverrideRequest, db: Session):
     try:
-        target_time = datetime.strptime(request.target_time, "%Y-%m-%d %H:%M:%S")
-        current_time = datetime.now()
+        local_timezone = pytz.timezone('Asia/Ho_Chi_Minh')  # Múi giờ Việt Nam
 
-        print(f"Current time: {current_time}")
-        print(f"Target time: {target_time}")
+        # Chuyển đổi target_time từ chuỗi sang đối tượng datetime với múi giờ Việt Nam
+        target_time = datetime.strptime(request.target_time, "%Y-%m-%d %H:%M:%S")
+        target_time = local_timezone.localize(target_time)  # Áp dụng múi giờ Việt Nam
+
+        current_time = datetime.now(local_timezone)  # Lấy thời gian hiện tại theo múi giờ Việt Nam
+
+        print(f"Current time (Vietnam): {current_time.strftime('%Y-%m-%d %H:%M:%S')} Vietnam Time")
+        print(f"Target time (Vietnam): {target_time.strftime('%Y-%m-%d %H:%M:%S')} Vietnam Time")
 
         while current_time < target_time:
             await asyncio.sleep(1)
-            current_time = datetime.now()
-            print(f"Waiting... Current time: {current_time}")
+            current_time = datetime.now(local_timezone)  # Cập nhật thời gian hiện tại theo múi giờ Việt Nam
+            print(f"Waiting... Current time (Vietnam): {current_time.strftime('%Y-%m-%d %H:%M:%S')} Vietnam Time")
 
-        print(f"Overriding price for {request.symbol} at {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Overriding price for {request.symbol} at {current_time.strftime('%Y-%m-%d %H:%M:%S')} Vietnam Time")
         print(f"Target price: {request.target_price}")
 
         if request.symbol == "BTC":
             data_to_send = {
                 "btc_price": request.target_price,
                 "eth_price": None,
-                "time": current_time.strftime("%Y-%m-%d %H:%M:%S")
+                "time": current_time.strftime('%Y-%m-%d %H:%M:%S')  # Gửi thời gian theo múi giờ Việt Nam
             }
             await manager.send_to_fe(str(request.userId), json.dumps(data_to_send))
         elif request.symbol == "ETH":
             data_to_send = {
                 "btc_price": None,
                 "eth_price": request.target_price,
-                "time": current_time.strftime("%Y-%m-%d %H:%M:%S")
+                "time": current_time.strftime('%Y-%m-%d %H:%M:%S')  # Gửi thời gian theo múi giờ Việt Nam
             }
             await manager.send_to_fe(str(request.userId), json.dumps(data_to_send))
         else:
