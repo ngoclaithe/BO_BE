@@ -24,7 +24,6 @@ class OverrideRequest(BaseModel):
     target_price: float
     symbol: str  
     target_time: str  
-
 async def receive_from_fe(websocket: WebSocket, db: Session):
     try:
         while True:
@@ -35,15 +34,19 @@ async def receive_from_fe(websocket: WebSocket, db: Session):
                 data_json = json.loads(data_from_fe)
                 print(f"Parsed JSON from FE: {data_json}")  
 
-                if "symbol" in data_json and "time" in data_json and "type" in data_json and "deposit" in data_json and "userId" in data_json and "current_price" in data_json:
+                if all(key in data_json for key in ["symbol", "time", "type", "deposit", "userId", "current_price"]):
+                    # Convert incoming UTC time to Vietnam time
                     utc_time = datetime.fromisoformat(data_json["time"].replace("Z", "+00:00"))
-                    local_timezone = pytz.timezone('Asia/Ho_Chi_Minh')  
-                    local_time = utc_time.replace(tzinfo=pytz.utc).astimezone(local_timezone)
+                    local_timezone = pytz.timezone('Asia/Ho_Chi_Minh')
+                    local_time = utc_time.astimezone(local_timezone)
+
+                    # Print the time conversion for verification
+                    print(f"Converted time - UTC: {utc_time}, Vietnam Time: {local_time}")
 
                     trade_data = TradeCreate(
                         symbol=data_json["symbol"],
                         userId=data_json["userId"],
-                        time_predict=local_time,
+                        time_predict=local_time,  # Using Vietnam time
                         type_predict=data_json["type"],
                         deposit=data_json["deposit"],
                         current_price=data_json["current_price"],
@@ -53,8 +56,7 @@ async def receive_from_fe(websocket: WebSocket, db: Session):
                     trade_service = TradeService(db)
                     created_trade = trade_service.create_trade(trade_data)
 
-                    # In ra thời gian local (giờ Việt Nam)
-                    print(f"Created trade with local time: {local_time.strftime('%Y-%m-%d %H:%M:%S')} Vietnam Time")
+                    print(f"Created trade with local time: {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
 
             except json.JSONDecodeError:
                 print("Received data is not a valid JSON")  
@@ -62,7 +64,7 @@ async def receive_from_fe(websocket: WebSocket, db: Session):
                 print(f"Error processing data from FE: {e}")  
 
     except Exception as e:
-        print(f"Error receiving data from FE: {e}") 
+        print(f"Error receiving data from FE: {e}")
 
 async def send_market_data(websocket: WebSocket):
     try:
